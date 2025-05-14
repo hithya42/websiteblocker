@@ -1,0 +1,81 @@
+import java.io.*;
+import java.nio.file.*;
+import java.time.LocalTime;
+import java.util.*;
+
+public class WebsiteBlocker {
+
+    private static final List<String> SITES_TO_BLOCK = Arrays.asList(
+            "www.facebook.com", "facebook.com",
+            "www.youtube.com", "youtube.com",
+            "www.gmail.com", "gmail.com",
+            "www.instagram.com", "instagram.com",
+            "www.twitter.com", "twitter.com",
+            "www.reddit.com", "reddit.com"
+    );
+
+    private static final String REDIRECT = "127.0.0.1";
+    private static final String LINUX_HOST = "/etc/hosts";
+    private static final String WINDOWS_HOST = "C:\\Windows\\System32\\drivers\\etc\\hosts";
+    private static String hostFilePath;
+
+    public static void main(String[] args) {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            hostFilePath = WINDOWS_HOST;
+        } else if (os.contains("nix") || os.contains("nux") || os.contains("mac")) {
+            hostFilePath = LINUX_HOST;
+        } else {
+            System.out.println("OS not supported");
+            return;
+        }
+
+        blockWebsites(9, 21);
+    }
+
+    public static void blockWebsites(int startHour, int endHour) {
+        while (true) {
+            try {
+                LocalTime now = LocalTime.now();
+                if (now.isAfter(LocalTime.of(startHour, 0)) && now.isBefore(LocalTime.of(endHour, 0))) {
+                    System.out.println("Do the work...");
+                    List<String> lines = Files.readAllLines(Paths.get(hostFilePath));
+                    Set<String> existing = new HashSet<>(lines);
+
+                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(hostFilePath, true))) {
+                        for (String site : SITES_TO_BLOCK) {
+                            String entry = REDIRECT + " " + site;
+                            if (existing.stream().noneMatch(line -> line.contains(site))) {
+                                writer.write(entry);
+                                writer.newLine();
+                            }
+                        }
+                    }
+                } else {
+                    System.out.println("Good Time");
+                    List<String> lines = Files.readAllLines(Paths.get(hostFilePath));
+                    List<String> newLines = new ArrayList<>();
+
+                    for (String line : lines) {
+                        boolean containsBlockedSite = SITES_TO_BLOCK.stream().anyMatch(line::contains);
+                        if (!containsBlockedSite) {
+                            newLines.add(line);
+                        }
+                    }
+                    Files.write(Paths.get(hostFilePath), newLines, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+                }
+
+                Thread.sleep(3000); // sleep for 3 seconds
+            } catch (IOException e) {
+                System.out.println("I/O error: " + e.getMessage());
+                break;
+            } catch (InterruptedException e) {
+                System.out.println("Interrupted: " + e.getMessage());
+                break;
+            } catch (SecurityException e) {
+                System.out.println("Permission error: Run the program as administrator.");
+                break;
+            }
+        }
+    }
+}
